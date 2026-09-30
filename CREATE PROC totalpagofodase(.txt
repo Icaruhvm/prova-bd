@@ -1,0 +1,113 @@
+CREATE PROC totalpagofodase(
+    @datainicial DATE,
+    @datafinal DATE,
+    @UF VARCHAR(50) = NULL
+)
+AS
+BEGIN
+    SELECT 
+        r.Ram_Descricao AS Ramo,
+        u.Descricao AS UF,
+        SUM(p.Pag_Valor) AS TotalPago  
+    FROM Pagar p                        
+    INNER JOIN empresa e ON p.FkEmpresa = e.Idempresa
+    INNER JOIN cidade c  ON e.FkCidade = c.idCidade
+    INNER JOIN uf u      ON c.Fkuf = u.IDuf
+    INNER JOIN Ramo r    ON e.FkRamo = r.idRamo
+    WHERE 
+        p.Pag_DataPagto IS NOT NULL 
+        AND p.Pag_DataPagto BETWEEN @datainicial AND @datafinal 
+        AND (@UF IS NULL OR u.Descricao = @UF)
+    GROUP BY 
+        r.Ram_Descricao, 
+        u.Descricao;
+END;
+GO
+
+EXEC totalpagofodase '2020-01-01', '2026-12-31';
+
+
+
+QUESTAO 2
+ALTER PROCEDURE sp_TotalPagoPorRamoEUF
+    @DataInicial DATE,
+    @DataFinal DATE,
+    @UF VARCHAR(50) = NULL,
+    @ValorMinimo DECIMAL(10,2) = 0.00
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        e.Emp_RazaoSocial AS Empresa,
+        r.Ram_Descricao AS Ramo,
+        u.Descricao AS UF,
+        SUM(p.Pag_Valor) AS [Total pago]
+    FROM Pagar p
+    INNER JOIN empresa e ON p.FkEmpresa = e.Idempresa
+    INNER JOIN Ramo r ON e.FkRamo = r.idRamo
+    INNER JOIN cidade c ON e.FkCidade = c.idCidade
+    INNER JOIN uf u ON c.Fkuf = u.IDuf
+    WHERE 
+        p.Pag_DataPagto IS NOT NULL 
+        AND p.Pag_DataPagto BETWEEN @DataInicial AND @DataFinal
+        AND (@UF IS NULL OR u.Descricao = @UF)
+    GROUP BY 
+        e.Emp_RazaoSocial,
+        r.Ram_Descricao, 
+        u.Descricao
+    HAVING 
+        SUM(p.Pag_Valor) > @ValorMinimo;
+END;
+GO
+
+QUESTAO 3
+
+SELECT * 
+INTO ##pagar_temp 
+FROM Pagar;
+
+QUESTAO 4
+
+SELECT 
+    e.Emp_RazaoSocial AS Empresa,
+    p.IdPagar AS idFatura,
+    p.Pag_Fatura AS fatura,
+    p.Pag_Descricao AS descricao,
+    p.Pag_Valor AS debito,
+    p.Pag_DataVencimento AS vencimento,
+    p.Pag_DataPagto AS pag_pagto,
+    CASE 
+        WHEN p.Pag_DataPagto IS NULL AND p.Pag_DataVencimento < GETDATE() 
+        THEN DATEDIFF(DAY, p.Pag_DataVencimento, GETDATE())
+        ELSE 0 
+    END AS atraso
+FROM Pagar p
+INNER JOIN empresa e ON p.FkEmpresa = e.Idempresa
+ORDER BY 
+    atraso DESC;
+
+
+QUESTAO 5
+-- 1. Criar o campo TESTE
+ALTER TABLE EMPRESA 
+ADD TESTE VARCHAR(10);
+
+-- 2. Excluir o campo TESTE
+ALTER TABLE EMPRESA 
+DROP COLUMN TESTE;
+
+-- 3. Deletar a tabela temporária
+DROP TABLE #EMPRESA_TEMP;
+
+QUESTAO 6
+SELECT 
+    e.Emp_RazaoSocial AS Empresa,
+    COUNT(p.IdPagar) AS QtdFaturasVencidas
+FROM Pagar p
+INNER JOIN empresa e ON p.FkEmpresa = e.Idempresa
+WHERE 
+    p.Pag_DataPagto IS NULL 
+    AND DATEDIFF(DAY, p.Pag_DataVencimento, GETDATE()) > 10
+GROUP BY 
+    e.Emp_RazaoSocial;
